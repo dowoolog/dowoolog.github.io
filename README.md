@@ -1,5 +1,7 @@
 # 네이버 블로그 아카이브
 
+<img width="553" height="349" alt="스크린샷 2026-10-29 164026" src="https://github.com/user-attachments/assets/c9e1407d-8f2f-4535-8a13-092a88faa189" />
+
 네이버 RSS의 제목·링크·작성일·카테고리와 짧은 본문 미리보기를 모아 보여주는 정적 사이트입니다. Python 표준 라이브러리와 HTML/CSS만 사용하며, 공개 저장소의 GitHub Actions와 Pages 무료 제공 범위에서 운영합니다. 별도 서버·데이터베이스·Jekyll·Node.js 빌드·JavaScript가 필요하지 않습니다.
 
 ## 주요 기능
