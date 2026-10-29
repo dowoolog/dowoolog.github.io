@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel><title>테스트 전용 RSS</title>
-<item><title><![CDATA[테스트 <script>alert(1)</script> & 제목]]></title><link>https://blog.naver.com/dowoolog/123</link><pubDate>Thu, 29 Oct 2026 13:41:24 +0900</pubDate><category><![CDATA[개발 & 기록]]></category><description>이 본문은 저장하면 안 됩니다.</description></item>
+<item><title><![CDATA[테스트 <script>alert(1)</script> & 제목]]></title><link>https://blog.naver.com/dowoolog/123</link><pubDate>Thu, 29 Oct 2026 13:41:24 +0900</pubDate><category><![CDATA[개발 & 기록]]></category><description><![CDATA[<p>미리보기 &amp; 테스트</p><script>hiddenScript()</script><style>hiddenStyle</style><p>다음 문장입니다.</p>]]></description></item>
 <item><title>같은 글</title><link>https://m.blog.naver.com/PostView.naver?blogId=dowoolog&amp;logNo=123&amp;tracking=1</link></item>
 <item><title>날짜가 없는 글</title><link>http://blog.naver.com/dowoolog/124</link></item>
 <item><title>나쁜 주소</title><link>javascript:alert(1)</link></item>

@@ -24,6 +24,49 @@ SAMPLE = (ROOT / "tests/fixtures/sample.xml").read_bytes()
 
 
 class ArchiveTests(unittest.TestCase):
+    def test_excerpt_plain_text_and_length(self):
+        text = '<p>안녕 <b>세계</b>&nbsp;&amp; 기록</p><br/><p>다음</p><img src="x"><script>bad()</script><style>bad</style><iframe>bad</iframe>'
+        self.assertEqual(archive.make_excerpt(text, 180), '안녕 세계 & 기록 다음')
+        self.assertEqual(archive.make_excerpt(text, 6), '안녕 세계…')
+        self.assertEqual(archive.make_excerpt(text, 0), '')
+        self.assertEqual(archive.make_excerpt('<img src="x">', 180), '')
+        self.assertEqual(archive.make_excerpt(None, 180), '')
+        for value in [-1, 1001, True, '180', 1.5]:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                archive.resolve_config({**CONFIG, 'EXCERPT_LENGTH': value})
+
+    def test_old_records_get_excerpt_without_losing_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'posts.json'
+            old = archive.parse_feed(SAMPLE, BLOG)
+            for post in old:
+                post.pop('excerpt')
+            archive.save_posts(path, old)
+            self.assertEqual(archive.load_posts(path, BLOG), old)
+            archive.collect(CONFIG, path, lambda _: SAMPLE)
+            updated = archive.load_posts(path, BLOG)
+            self.assertEqual(updated[0]['excerpt'], '미리보기 & 테스트 다음 문장입니다.')
+            self.assertEqual({k: v for k, v in updated[0].items() if k != 'excerpt'}, old[0])
+            before = path.read_bytes()
+            archive.collect({**CONFIG, 'EXCERPT_LENGTH': 0}, path, lambda _: SAMPLE)
+            self.assertEqual(path.read_bytes(), before)
+            archive.collect(CONFIG, path, lambda _: SAMPLE.replace(b'description', b'unused'))
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_excerpt_rendering_escaping_and_disabled(self):
+        posts = archive.parse_feed(SAMPLE, BLOG)
+        posts[0]['excerpt'] = '<script>unsafe</script> & text'
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            archive.build(CONFIG, posts, output)
+            html = (output / 'index.html').read_text(encoding='utf-8')
+            self.assertIn('<p class="excerpt">&lt;script&gt;unsafe&lt;/script&gt; &amp; text</p>', html)
+            self.assertEqual(html.count('class="excerpt"'), 1)
+            archive.build({**CONFIG, 'EXCERPT_LENGTH': 5}, posts, output)
+            self.assertIn('&lt;scr…</p>', (output / 'index.html').read_text(encoding='utf-8'))
+            archive.build({**CONFIG, 'EXCERPT_LENGTH': 0}, posts, output)
+            self.assertNotIn('class="excerpt"', (output / 'index.html').read_text(encoding='utf-8'))
+
     def test_fork_settings_propagate_without_original_posts(self):
         config = archive.resolve_config({**CONFIG, "BLOG_ID": "another_blog",
                                          "SITE_NAME": "다른 이름 & Archive", "RSS_URL": ""})
@@ -153,7 +196,9 @@ class ArchiveTests(unittest.TestCase):
             self.assertIn('name="naver-site-verification" content="naver-token"', html)
             self.assertIn('lang="ko"', html)
             self.assertIn('작성일 미제공', html)
-            self.assertNotIn('이 본문은', html)
+            self.assertIn('미리보기 &amp; 테스트 다음 문장입니다.', html)
+            self.assertNotIn('hiddenScript', html)
+            self.assertNotIn('hiddenStyle', html)
             sitemap = ET.parse(output / "sitemap.xml")
             self.assertEqual([e.text for e in sitemap.findall('.//{*}loc')], ["https://example.com/archive/"])
             self.assertIn('Sitemap: https://example.com/archive/sitemap.xml', (output / "robots.txt").read_text())

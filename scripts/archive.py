@@ -4,6 +4,7 @@ import argparse
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 from html import escape
+from html.parser import HTMLParser
 from http.client import HTTPException
 import json
 import os
@@ -21,6 +22,56 @@ MAX_FEED_BYTES = 5_000_000
 KST = timezone(timedelta(hours=9))
 
 
+def excerpt_length(config):
+    length = config.get("EXCERPT_LENGTH", 180)
+    if type(length) is not int or not 0 <= length <= 1000:
+        raise ValueError("EXCERPT_LENGTH must be an integer between 0 and 1000")
+    return length
+
+
+class PlainText(HTMLParser):
+    """Extract readable RSS text without scripts, styles or embedded content."""
+    ignored = {"script", "style", "iframe", "object", "template", "noscript"}
+    breaks = {"p", "div", "br", "hr", "li", "ul", "ol", "section", "article",
+              "h1", "h2", "h3", "h4", "h5", "h6", "tr", "td", "blockquote"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self.hidden = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self.ignored:
+            self.hidden.append(tag)
+        if tag in self.breaks and not self.hidden:
+            self.parts.append(" ")
+
+    def handle_endtag(self, tag):
+        if tag in self.hidden:
+            del self.hidden[self.hidden.index(tag):]
+        if tag in self.breaks and not self.hidden:
+            self.parts.append(" ")
+
+    def handle_data(self, data):
+        if not self.hidden:
+            self.parts.append(data)
+
+
+def shorten(text, length):
+    if not length:
+        return ""
+    return text if len(text) <= length else text[:length - 1].rstrip() + "…"
+
+
+def make_excerpt(description, length):
+    if not description or not length:
+        return ""
+    parser = PlainText()
+    parser.feed(description)
+    parser.close()
+    return shorten(" ".join("".join(parser.parts).split()), length)
+
+
 def resolve_config(settings):
     """Derive blog addresses from the single user-editable blog ID."""
     blog_id = settings.get("BLOG_ID", "")
@@ -28,6 +79,7 @@ def resolve_config(settings):
         raise ValueError("BLOG_ID must be a valid Naver blog ID")
     return {
         **settings,
+        "EXCERPT_LENGTH": excerpt_length(settings),
         "BLOG_URL": f"https://blog.naver.com/{blog_id}",
         "RSS_URL": settings.get("RSS_URL") or f"https://rss.blog.naver.com/{blog_id}.xml",
     }
@@ -91,7 +143,7 @@ def sort_posts(posts):
     return sorted(posts, key=lambda p: (p["published_at"] or "", p["url"]), reverse=True)
 
 
-def parse_feed(raw, blog_url):
+def parse_feed(raw, blog_url, length=180):
     if len(raw) > MAX_FEED_BYTES:
         raise ValueError("RSS exceeds size limit")
     # RSS does not need DTDs. Also catches UTF-16/32 encodings before XML parsing.
@@ -118,6 +170,7 @@ def parse_feed(raw, blog_url):
             "url": url,
             "published_at": parse_date(item.findtext("pubDate")),
             "category": (item.findtext("category") or "").strip() or None,
+            "excerpt": make_excerpt(item.findtext("description"), length),
         })
     return sort_posts(posts.values())
 
@@ -137,8 +190,11 @@ def load_posts(path, blog_url):
     if not isinstance(posts, list):
         raise ValueError("Archive JSON must contain a list")
     for post in posts:
-        if not isinstance(post, dict) or set(post) != {"title", "url", "published_at", "category"}:
+        required = {"title", "url", "published_at", "category"}
+        if not isinstance(post, dict) or not required <= set(post) or set(post) - required - {"excerpt"}:
             raise ValueError("Invalid stored post schema")
+        if "excerpt" in post and not isinstance(post["excerpt"], str):
+            raise ValueError("Invalid stored excerpt")
         if not isinstance(post["title"], str) or not post["title"].strip():
             raise ValueError("Invalid stored title")
         post_url(post["url"], blog_url)
@@ -171,9 +227,10 @@ def save_posts(path, posts):
 
 
 def collect(config, path, fetcher=fetch_feed):
+    length = excerpt_length(config)
     existing = load_posts(path, config["BLOG_URL"])
     try:
-        incoming = parse_feed(fetcher(config["RSS_URL"]), config["BLOG_URL"])
+        incoming = parse_feed(fetcher(config["RSS_URL"]), config["BLOG_URL"], length)
         if not incoming:
             raise ValueError("RSS contains zero usable posts")
     except (OSError, ValueError, HTTPException, ET.ParseError) as error:
@@ -183,12 +240,18 @@ def collect(config, path, fetcher=fetch_feed):
     for post in existing + incoming:
         url = post_url(post["url"], config["BLOG_URL"])
         merged.setdefault(url, {**post, "url": url})
+    # Backfill old records and refresh previews when the configured length changes.
+    # Missing descriptions or disabled previews never erase an archived excerpt.
+    for post in incoming:
+        if post["excerpt"]:
+            merged[post["url"]]["excerpt"] = post["excerpt"]
     changed = save_posts(path, sort_posts(merged.values()))
     print(f"Archive: {len(merged)} posts; changed={changed}")
     return True
 
 
 def build(config, posts, output):
+    length = excerpt_length(config)
     site_url = config["SITE_URL"].rstrip("/") + "/"
     site = web_url(site_url)
     if site.query or site.fragment:
@@ -203,8 +266,11 @@ def build(config, posts, output):
             day = datetime.fromisoformat(post["published_at"]).astimezone(KST).date().isoformat()
             date = f'<time datetime="{e(post["published_at"])}">{day}</time>'
         category = f'<span class="category">{e(post["category"])}</span>' if post["category"] else ""
+        excerpt = shorten(post.get("excerpt", ""), length)
+        preview = f'<p class="excerpt">{e(excerpt)}</p>' if excerpt else ""
         rows.append(f'<li><article><div class="meta">{date}{category}</div>'
                     f'<h3><a href="{e(url, quote=True)}">{e(post["title"])}</a></h3>'
+                    f'{preview}'
                     '<span class="source">네이버 블로그 원문 ↗</span></article></li>')
     listing = '<ol class="posts">' + "\n".join(rows) + '</ol>' if rows else '<p class="empty">아직 수집된 게시글이 없습니다.</p>'
     verification = "\n".join(
