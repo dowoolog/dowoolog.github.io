@@ -91,6 +91,17 @@ def data_path(config):
     return ROOT / "data" / f"{config['BLOG_ID']}.json"
 
 
+def last_collected(path):
+    metadata = path.with_suffix(".meta.json")
+    if not metadata.exists():
+        return None
+    value = json.loads(metadata.read_text(encoding="utf-8"))["last_collected_at"]
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is None:
+        raise ValueError("Collection timestamp must have a timezone")
+    return dt
+
+
 def web_url(value):
     """Reject credentials, control characters and non-HTTP(S) URLs."""
     if not isinstance(value, str) or re.search(r'[\s<>"\\\x00-\x1f\x7f]', value):
@@ -246,11 +257,14 @@ def collect(config, path, fetcher=fetch_feed):
         if post["excerpt"]:
             merged[post["url"]]["excerpt"] = post["excerpt"]
     changed = save_posts(path, sort_posts(merged.values()))
+    save_posts(path.with_suffix(".meta.json"), {
+        "last_collected_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    })
     print(f"Archive: {len(merged)} posts; changed={changed}")
     return True
 
 
-def build(config, posts, output):
+def build(config, posts, output, collected_at=None):
     length = excerpt_length(config)
     site_url = config["SITE_URL"].rstrip("/") + "/"
     site = web_url(site_url)
@@ -258,6 +272,11 @@ def build(config, posts, output):
         raise ValueError("SITE_URL must not contain query strings or fragments")
     web_url(config["BLOG_URL"])
     e = escape
+    collection_label = "최근 가져온 시간: 기록 없음"
+    if collected_at is not None:
+        local_time = collected_at.astimezone(KST)
+        collection_label = (f'최근 가져온 시간: <time datetime="{local_time.isoformat()}">'
+                            f'{local_time:%Y-%m-%d %H:%M} KST</time>')
     rows = []
     for post in sort_posts(posts):
         url = post_url(post["url"], config["BLOG_URL"])
@@ -299,12 +318,12 @@ def build(config, posts, output):
 <body>
 <a class="skip" href="#posts">게시글 목록으로 건너뛰기</a>
 <div class="container">
-<header><p class="eyebrow">BLOG ARCHIVE</p>
+<header><p class="collection-time">{collection_label}</p>
 <h1>{e(config['SITE_NAME'])}</h1>
 <p class="intro">{e(config['DESCRIPTION'])}</p>
 <a class="blog-link" href="{e(config['BLOG_URL'], quote=True)}">네이버 블로그 방문 ↗</a></header>
 <main id="posts"><section aria-labelledby="posts-heading">
-<div class="section-heading"><h2 id="posts-heading">게시글 <span class="count">{len(posts)}</span></h2><p>최신순 · 날짜는 한국 시간 기준</p></div>
+<div class="section-heading"><h2 id="posts-heading">게시글 <span class="count">{len(posts)}</span></h2><p>최신순</p></div>
 {listing}
 </section></main>
 <footer><span>{e(config['SITE_NAME'])}</span><p>글의 제목과 작성일을 보관합니다. 전체 내용은 네이버 블로그에서 읽을 수 있습니다.</p></footer>
@@ -338,7 +357,7 @@ def main():
     path = data_path(config)
     if args.command == "collect":
         return 0 if collect(config, path) else 1
-    build(config, load_posts(path, config["BLOG_URL"]), ROOT / "_site")
+    build(config, load_posts(path, config["BLOG_URL"]), ROOT / "_site", last_collected(path))
     return 0
 
 

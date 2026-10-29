@@ -26,6 +26,34 @@ SAMPLE = (ROOT / "tests/fixtures/sample.xml").read_bytes()
 
 
 class ArchiveTests(unittest.TestCase):
+    def test_collection_time_tracks_success_even_without_new_posts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'posts.json'
+            self.assertIsNone(archive.last_collected(path))
+            first = archive.datetime(2026, 10, 29, 1, tzinfo=archive.timezone.utc)
+            second = first + archive.timedelta(hours=1)
+            for instant in [first, second]:
+                with patch.object(archive, 'datetime', wraps=archive.datetime) as clock:
+                    clock.now.return_value = instant
+                    self.assertTrue(archive.collect(CONFIG, path, lambda _: SAMPLE))
+                self.assertEqual(archive.last_collected(path), instant)
+            saved = path.with_suffix('.meta.json').read_bytes()
+            self.assertFalse(archive.collect(CONFIG, path, lambda _: b'<rss><channel/></rss>'))
+            self.assertEqual(path.with_suffix('.meta.json').read_bytes(), saved)
+
+    def test_collection_time_header_uses_kst_and_unknown_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            archive.build(CONFIG, [], output)
+            self.assertIn('최근 가져온 시간: 기록 없음', (output / 'index.html').read_text(encoding='utf-8'))
+            instant = archive.datetime(2026, 10, 29, 16, 30, tzinfo=archive.timezone.utc)
+            archive.build(CONFIG, [], output, instant)
+            html = (output / 'index.html').read_text(encoding='utf-8')
+            self.assertIn('2026-10-30 01:30 KST', html)
+            self.assertIn('<p>최신순</p>', html)
+            self.assertNotIn('날짜는 한국 시간 기준', html)
+            self.assertNotIn('BLOG ARCHIVE', html)
+
     def test_validate_reports_bad_config_without_exposing_values(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(archive, 'ROOT', Path(tmp)):
             path = Path(tmp) / 'config.json'
