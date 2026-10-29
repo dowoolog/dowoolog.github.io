@@ -318,8 +318,7 @@ def build(config, posts, output, collected_at=None):
 <body>
 <a class="skip" href="#posts">게시글 목록으로 건너뛰기</a>
 <div class="container">
-<header><div class="collection-info"><p class="collection-time">{collection_label}</p>
-<p class="collection-interval">업데이트 주기: 1시간 (매시 00분)</p></div>
+<header><p class="collection-time">{collection_label} · 업데이트 주기: 1시간 (매시 00분)</p>
 <h1>{e(config['SITE_NAME'])}</h1>
 <p class="intro">{e(config['DESCRIPTION'])}</p>
 <a class="blog-link" href="{e(config['BLOG_URL'], quote=True)}">네이버 블로그 방문 ↗</a></header>
