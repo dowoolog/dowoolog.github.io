@@ -1,0 +1,77 @@
+name: Collect RSS and deploy Pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 21 * * *' # 매일 06:17 KST (전날 21:17 UTC)
+  workflow_dispatch:
+
+permissions: {}
+
+# Collection, commit and deployment share one queue; never cancel an in-flight commit.
+concurrency:
+  group: archive-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Test
+        run: python -m unittest discover -s tests -v
+      - name: Collect RSS
+        id: collect
+        continue-on-error: true
+        run: python scripts/archive.py collect
+      - name: Report RSS failure
+        if: steps.collect.outcome == 'failure'
+        run: echo '::warning::RSS collection failed. Building from the existing archive; inspect the collection log.'
+      - name: Build static site
+        run: python scripts/archive.py build
+      - name: Commit changed archive
+        shell: bash
+        run: |
+          git add data/posts.json
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m "chore: archive new blog posts"
+          fi
+          # Refuse a stale deployment if main changed while we were building.
+          # No force push or automatic merge of competing JSON changes.
+          git fetch origin main
+          git merge-base --is-ancestor origin/main HEAD || {
+            echo '::error::main changed during build. Run this workflow again.'
+            exit 1
+          }
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+            git push origin HEAD:main
+          fi
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
