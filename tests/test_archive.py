@@ -29,17 +29,22 @@ class ArchiveTests(unittest.TestCase):
     def test_collection_time_tracks_success_even_without_new_posts(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'posts.json'
-            self.assertIsNone(archive.last_collected(path))
+            self.assertEqual(archive.collection_state(path), (None, False))
             first = archive.datetime(2026, 10, 29, 1, tzinfo=archive.timezone.utc)
             second = first + archive.timedelta(hours=1)
+            saved = None
             for instant in [first, second]:
                 with patch.object(archive, 'datetime', wraps=archive.datetime) as clock:
                     clock.now.return_value = instant
                     self.assertTrue(archive.collect(CONFIG, path, lambda _: SAMPLE))
-                self.assertEqual(archive.last_collected(path), instant)
-            saved = path.with_suffix('.meta.json').read_bytes()
+                self.assertEqual(archive.collection_state(path), (instant, False))
+                if saved is not None:
+                    self.assertEqual(path.read_bytes(), saved)
+                saved = path.read_bytes()
+            self.assertFalse(path.with_suffix('.meta.json').exists())
             self.assertFalse(archive.collect(CONFIG, path, lambda _: b'<rss><channel/></rss>'))
-            self.assertEqual(path.with_suffix('.meta.json').read_bytes(), saved)
+            self.assertEqual(path.read_bytes(), saved)
+            self.assertEqual(archive.collection_state(path), (None, True))
 
     def test_collection_time_header_uses_kst_and_unknown_fallback(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -53,6 +58,10 @@ class ArchiveTests(unittest.TestCase):
             self.assertIn('<p>최신순</p>', html)
             self.assertNotIn('날짜는 한국 시간 기준', html)
             self.assertNotIn('BLOG ARCHIVE', html)
+            archive.build(CONFIG, [], output, instant, collection_failed=True)
+            html = (output / 'index.html').read_text(encoding='utf-8')
+            self.assertIn('이번 수집 실패 · 보관된 글 표시 중', html)
+            self.assertNotIn('2026-10-30 01:30', html)
 
     def test_validate_reports_bad_config_without_exposing_values(self):
         with tempfile.TemporaryDirectory() as tmp, patch.object(archive, 'ROOT', Path(tmp)):

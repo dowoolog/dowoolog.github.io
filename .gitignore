@@ -22,3 +22,6 @@ __pycache__/
 *.py[cod]
 .venv/
 .tools/
+
+# Per-run collection status; rendered into HTML but never committed
+/data/.runtime/

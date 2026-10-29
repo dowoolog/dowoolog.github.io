@@ -91,15 +91,21 @@ def data_path(config):
     return ROOT / "data" / f"{config['BLOG_ID']}.json"
 
 
-def last_collected(path):
-    metadata = path.with_suffix(".meta.json")
+def collection_state_path(path):
+    return path.parent / ".runtime" / path.name
+
+
+def collection_state(path):
+    metadata = collection_state_path(path)
     if not metadata.exists():
-        return None
-    value = json.loads(metadata.read_text(encoding="utf-8"))["last_collected_at"]
-    dt = datetime.fromisoformat(value)
+        return None, False
+    state = json.loads(metadata.read_text(encoding="utf-8"))
+    if state["status"] != "success":
+        return None, True
+    dt = datetime.fromisoformat(state["collected_at"])
     if dt.tzinfo is None:
         raise ValueError("Collection timestamp must have a timezone")
-    return dt
+    return dt, False
 
 
 def web_url(value):
@@ -239,6 +245,8 @@ def save_posts(path, posts):
 
 def collect(config, path, fetcher=fetch_feed):
     length = excerpt_length(config)
+    # Reset this run before any operation that can fail; never reuse an old success.
+    save_posts(collection_state_path(path), {"status": "failed"})
     existing = load_posts(path, config["BLOG_URL"])
     try:
         incoming = parse_feed(fetcher(config["RSS_URL"]), config["BLOG_URL"], length)
@@ -257,14 +265,15 @@ def collect(config, path, fetcher=fetch_feed):
         if post["excerpt"]:
             merged[post["url"]]["excerpt"] = post["excerpt"]
     changed = save_posts(path, sort_posts(merged.values()))
-    save_posts(path.with_suffix(".meta.json"), {
-        "last_collected_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    save_posts(collection_state_path(path), {
+        "status": "success",
+        "collected_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     })
     print(f"Archive: {len(merged)} posts; changed={changed}")
     return True
 
 
-def build(config, posts, output, collected_at=None):
+def build(config, posts, output, collected_at=None, collection_failed=False):
     length = excerpt_length(config)
     site_url = config["SITE_URL"].rstrip("/") + "/"
     site = web_url(site_url)
@@ -273,7 +282,9 @@ def build(config, posts, output, collected_at=None):
     web_url(config["BLOG_URL"])
     e = escape
     collection_label = "최근 가져온 시간: 기록 없음"
-    if collected_at is not None:
+    if collection_failed:
+        collection_label = "이번 수집 실패 · 보관된 글 표시 중"
+    elif collected_at is not None:
         local_time = collected_at.astimezone(KST)
         collection_label = (f'최근 가져온 시간: <time datetime="{local_time.isoformat()}">'
                             f'{local_time:%Y-%m-%d %H:%M} KST</time>')
@@ -357,7 +368,8 @@ def main():
     path = data_path(config)
     if args.command == "collect":
         return 0 if collect(config, path) else 1
-    build(config, load_posts(path, config["BLOG_URL"]), ROOT / "_site", last_collected(path))
+    collected_at, failed = collection_state(path)
+    build(config, load_posts(path, config["BLOG_URL"]), ROOT / "_site", collected_at, failed)
     return 0
 
 
