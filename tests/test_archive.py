@@ -12,12 +12,46 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("archive", ROOT / "scripts/archive.py")
 archive = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(archive)
-CONFIG = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
+# Fixtures must keep working when someone customizes config.json after a fork.
+CONFIG = archive.resolve_config({
+    "BLOG_ID": "dowoolog",
+    "SITE_NAME": "Test Archive",
+    "SITE_URL": "https://example.com",
+    "DESCRIPTION": "테스트 아카이브",
+})
 BLOG = CONFIG["BLOG_URL"]
 SAMPLE = (ROOT / "tests/fixtures/sample.xml").read_bytes()
 
 
 class ArchiveTests(unittest.TestCase):
+    def test_fork_settings_propagate_without_original_posts(self):
+        config = archive.resolve_config({**CONFIG, "BLOG_ID": "another_blog",
+                                         "SITE_NAME": "다른 이름 & Archive", "RSS_URL": ""})
+        self.assertEqual(config["RSS_URL"], "https://rss.blog.naver.com/another_blog.xml")
+        self.assertEqual(config["BLOG_URL"], "https://blog.naver.com/another_blog")
+        with tempfile.TemporaryDirectory() as tmp, patch.object(archive, "ROOT", Path(tmp)):
+            old_path = archive.data_path(CONFIG)
+            archive.save_posts(old_path, archive.parse_feed(SAMPLE, BLOG))
+            original = old_path.read_bytes()
+            path = archive.data_path(config)
+            self.assertEqual(archive.load_posts(path, config["BLOG_URL"]), [])
+            self.assertTrue(archive.collect(config, path, lambda _: SAMPLE.replace(b"dowoolog", b"another_blog")))
+            posts = archive.load_posts(path, config["BLOG_URL"])
+            self.assertEqual(len(posts), 2)
+            self.assertEqual(old_path.read_bytes(), original)
+        with tempfile.TemporaryDirectory() as tmp:
+            archive.build(config, posts, Path(tmp))
+            html = (Path(tmp) / "index.html").read_text(encoding="utf-8")
+            for old in ["dowoolog", "Dowoo", "DOWOO", "Test Archive"]:
+                self.assertNotIn(old, html)
+            self.assertEqual(html.count("다른 이름 &amp; Archive"), 5)
+            self.assertIn('href="https://blog.naver.com/another_blog"', html)
+
+    def test_invalid_blog_id_cannot_escape_data_directory(self):
+        for value in ["../other", "", "a/b", None]:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                archive.data_path({**CONFIG, "BLOG_ID": value})
+
     def test_feed_metadata_deduplication_and_missing_date(self):
         posts = archive.parse_feed(SAMPLE, BLOG)
         self.assertEqual(len(posts), 2)

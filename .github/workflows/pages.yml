@@ -42,7 +42,7 @@ jobs:
       - name: Commit changed archive
         shell: bash
         run: |
-          git add data/posts.json
+          git add -- 'data/*.json'
           if ! git diff --cached --quiet; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'

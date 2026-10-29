@@ -21,6 +21,24 @@ MAX_FEED_BYTES = 5_000_000
 KST = timezone(timedelta(hours=9))
 
 
+def resolve_config(settings):
+    """Derive blog addresses from the single user-editable blog ID."""
+    blog_id = settings.get("BLOG_ID", "")
+    if not isinstance(blog_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", blog_id):
+        raise ValueError("BLOG_ID must be a valid Naver blog ID")
+    return {
+        **settings,
+        "BLOG_URL": f"https://blog.naver.com/{blog_id}",
+        "RSS_URL": settings.get("RSS_URL") or f"https://rss.blog.naver.com/{blog_id}.xml",
+    }
+
+
+def data_path(config):
+    # Each blog has its own archive, including when this repository is forked.
+    config = resolve_config(config)
+    return ROOT / "data" / f"{config['BLOG_ID']}.json"
+
+
 def web_url(value):
     """Reject credentials, control characters and non-HTTP(S) URLs."""
     if not isinstance(value, str) or re.search(r'[\s<>"\\\x00-\x1f\x7f]', value):
@@ -106,7 +124,7 @@ def parse_feed(raw, blog_url):
 
 def fetch_feed(url):
     web_url(url)
-    request = Request(url, headers={"User-Agent": "DowooArchive/1.0 (daily RSS reader)"})
+    request = Request(url, headers={"User-Agent": "NaverBlogArchive/1.0 (daily RSS reader)"})
     with urlopen(request, timeout=30) as response:
         return response.read(MAX_FEED_BYTES + 1)
 
@@ -117,7 +135,7 @@ def load_posts(path, blog_url):
         return []
     posts = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(posts, list):
-        raise ValueError("posts.json must contain a list")
+        raise ValueError("Archive JSON must contain a list")
     for post in posts:
         if not isinstance(post, dict) or set(post) != {"title", "url", "published_at", "category"}:
             raise ValueError("Invalid stored post schema")
@@ -215,7 +233,7 @@ def build(config, posts, output):
 <body>
 <a class="skip" href="#posts">게시글 목록으로 건너뛰기</a>
 <div class="container">
-<header><p class="eyebrow">DOWOO / BLOG ARCHIVE</p>
+<header><p class="eyebrow">BLOG ARCHIVE</p>
 <h1>{e(config['SITE_NAME'])}</h1>
 <p class="intro">{e(config['DESCRIPTION'])}</p>
 <a class="blog-link" href="{e(config['BLOG_URL'], quote=True)}">네이버 블로그 방문 ↗</a></header>
@@ -243,8 +261,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["collect", "build"])
     args = parser.parse_args()
-    config = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
-    path = ROOT / "data/posts.json"
+    config = resolve_config(json.loads((ROOT / "config.json").read_text(encoding="utf-8")))
+    path = data_path(config)
     if args.command == "collect":
         return 0 if collect(config, path) else 1
     build(config, load_posts(path, config["BLOG_URL"]), ROOT / "_site")

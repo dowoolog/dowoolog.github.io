@@ -1,9 +1,8 @@
 {
-  "SITE_NAME": "Dowoo's Archive",
+  "SITE_NAME": "Dowoo's Naver Blog Archive",
   "SITE_URL": "https://dowoolog.github.io",
-  "DESCRIPTION": "Dowoo의 네이버 블로그 글을 한곳에서 찾아보는 아카이브입니다. 제목과 작성일을 확인하고 원문으로 이동하세요.",
-  "BLOG_URL": "https://blog.naver.com/dowoolog",
-  "RSS_URL": "https://rss.blog.naver.com/dowoolog.xml",
+  "DESCRIPTION": "네이버 블로그 글을 한곳에서 찾아보는 아카이브입니다. 제목과 작성일을 확인하고 원문으로 이동하세요.",
+  "BLOG_ID": "dowoolog",
   "GOOGLE_SITE_VERIFICATION": "",
   "NAVER_SITE_VERIFICATION": ""
 }
