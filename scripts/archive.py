@@ -325,9 +325,16 @@ def build(config, posts, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["collect", "build"])
+    parser.add_argument("command", choices=["validate", "collect", "build"])
     args = parser.parse_args()
-    config = resolve_config(json.loads((ROOT / "config.json").read_text(encoding="utf-8")))
+    try:
+        config = resolve_config(json.loads((ROOT / "config.json").read_text(encoding="utf-8")))
+    except json.JSONDecodeError as error:
+        parser.error(f"config.json:{error.lineno}:{error.colno}: {error.msg}. "
+                     "Check commas between settings and double quotes around strings.")
+    if args.command == "validate":
+        print("config.json: OK")
+        return 0
     path = data_path(config)
     if args.command == "collect":
         return 0 if collect(config, path) else 1

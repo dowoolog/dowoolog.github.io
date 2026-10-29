@@ -28,6 +28,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Validate configuration
+        run: python scripts/archive.py validate
       - name: Test
         run: python -m unittest discover -s tests -v
       - name: Collect RSS

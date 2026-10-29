@@ -1,4 +1,6 @@
 import importlib.util
+import contextlib
+import io
 from http.client import IncompleteRead
 import json
 from pathlib import Path
@@ -24,6 +26,21 @@ SAMPLE = (ROOT / "tests/fixtures/sample.xml").read_bytes()
 
 
 class ArchiveTests(unittest.TestCase):
+    def test_validate_reports_bad_config_without_exposing_values(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(archive, 'ROOT', Path(tmp)):
+            path = Path(tmp) / 'config.json'
+            path.write_text('{"BLOG_ID": "test"\n"TOKEN": "private-value"}', encoding='utf-8')
+            errors = io.StringIO()
+            with patch('sys.argv', ['archive.py', 'validate']), contextlib.redirect_stderr(errors):
+                with self.assertRaises(SystemExit) as result:
+                    archive.main()
+            self.assertEqual(result.exception.code, 2)
+            self.assertIn('config.json:2:1', errors.getvalue())
+            self.assertNotIn('private-value', errors.getvalue())
+            path.write_text('{"BLOG_ID": "test"}', encoding='utf-8')
+            with patch('sys.argv', ['archive.py', 'validate']):
+                self.assertEqual(archive.main(), 0)
+
     def test_excerpt_plain_text_and_length(self):
         text = '<p>안녕 <b>세계</b>&nbsp;&amp; 기록</p><br/><p>다음</p><img src="x"><script>bad()</script><style>bad</style><iframe>bad</iframe>'
         self.assertEqual(archive.make_excerpt(text, 180), '안녕 세계 & 기록 다음')
