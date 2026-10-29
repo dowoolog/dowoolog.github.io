@@ -1,7 +1,7 @@
 {
   "SITE_NAME": "Dowoo's Naver Blog Archive",
   "SITE_URL": "https://dowoolog.github.io",
-  "DESCRIPTION": "네이버 블로그 글을 한곳에서 찾아보는 아카이브입니다. 제목과 작성일을 확인하고 원문으로 이동하세요.",
+  "DESCRIPTION": "네이버 블로그 글을 한곳에서 찾아보는 아카이브입니다.",
   "BLOG_ID": "dowoolog",
   "EXCERPT_LENGTH": 180,
   "GOOGLE_SITE_VERIFICATION": "Vph6V9TKkxC6bSim3cV6PTrIESWqZGR3rGAHZo3Tj5Q",
