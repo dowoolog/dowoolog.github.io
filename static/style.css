@@ -15,7 +15,7 @@ main { min-height: 280px; padding: 36px 0 56px; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 h2 { font-size: 18px; margin: 0; }
 .count { margin-left: 8px; color: var(--accent); font: 600 15px ui-monospace, monospace; }
-.section-heading p, .meta, .source { font-size: 13px; color: var(--muted); }
+.section-heading p, .meta { font-size: 13px; color: var(--muted); }
 .posts { list-style: none; padding: 0; margin: 18px 0 0; }
 .posts li { padding: 26px 0; border-bottom: 1px solid var(--line); }
 .meta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }

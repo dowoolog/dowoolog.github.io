@@ -271,7 +271,7 @@ def build(config, posts, output):
         rows.append(f'<li><article><div class="meta">{date}{category}</div>'
                     f'<h3><a href="{e(url, quote=True)}">{e(post["title"])}</a></h3>'
                     f'{preview}'
-                    '<span class="source">네이버 블로그 원문 ↗</span></article></li>')
+                    '</article></li>')
     listing = '<ol class="posts">' + "\n".join(rows) + '</ol>' if rows else '<p class="empty">아직 수집된 게시글이 없습니다.</p>'
     verification = "\n".join(
         f'<meta name="{name}" content="{e(config.get(key, ""), quote=True)}">'
