@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: '0 * * * *' # 매시간 00분 (UTC/KST 동일한 분)
+    # 수집 예약: 매시간 정각
+    - cron: '0 * * * *' # UTC/KST 동일한 분
   workflow_dispatch:
 
 permissions: {}
