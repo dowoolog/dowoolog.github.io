@@ -262,6 +262,7 @@ def collect(config, path, fetcher=fetch_feed):
     # Backfill old records and refresh previews when the configured length changes.
     # Missing descriptions or disabled previews never erase an archived excerpt.
     for post in incoming:
+        merged[post["url"]]["title"] = post["title"]
         if post["excerpt"]:
             merged[post["url"]]["excerpt"] = post["excerpt"]
     changed = save_posts(path, sort_posts(merged.values()))

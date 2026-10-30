@@ -172,17 +172,37 @@ class ArchiveTests(unittest.TestCase):
         for value in [None, "", "not a date", "Thu, 29 Oct 2026 13:41:24"]:
             self.assertIsNone(archive.parse_date(value))
 
-    def test_old_posts_survive_and_existing_metadata_does_not_change(self):
+    def test_titles_refresh_and_old_posts_survive(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "posts.json"
             archive.collect(CONFIG, path, lambda _: SAMPLE)
-            original = path.read_bytes()
+            original = archive.load_posts(path, BLOG)
             modified = SAMPLE.replace(b"alert(1)", b"changed title")
             self.assertTrue(archive.collect(CONFIG, path, lambda _: modified))
-            self.assertEqual(path.read_bytes(), original)
+            updated = archive.load_posts(path, BLOG)
+            expected = [dict(post) for post in original]
+            expected[0]['title'] = expected[0]['title'].replace('alert(1)', 'changed title')
+            self.assertEqual(updated, expected)
+            saved = path.read_bytes()
+            self.assertTrue(archive.collect(CONFIG, path, lambda _: modified))
+            self.assertEqual(path.read_bytes(), saved)
             new = b'<rss><channel><item><title>new</title><link>https://blog.naver.com/dowoolog/125</link></item></channel></rss>'
             archive.collect(CONFIG, path, lambda _: new)
             self.assertEqual(len(json.loads(path.read_text(encoding="utf-8"))), 3)
+            self.assertEqual([post for post in archive.load_posts(path, BLOG)
+                              if post['url'] != BLOG + '/125'], expected)
+
+    def test_title_refresh_normalizes_urls_and_preserves_missing_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'posts.json'
+            original = archive.parse_feed(SAMPLE, BLOG)
+            original[0]['url'] = 'http://m.blog.naver.com/dowoolog/123?tracking=1'
+            archive.save_posts(path, original)
+            feed = b'<rss><channel><item><title>Renamed post</title><link>https://blog.naver.com/PostView.naver?blogId=dowoolog&amp;logNo=123</link></item></channel></rss>'
+            self.assertTrue(archive.collect(CONFIG, path, lambda _: feed))
+            expected = [dict(post) for post in original]
+            expected[0].update(title='Renamed post', url=BLOG + '/123')
+            self.assertEqual(archive.load_posts(path, BLOG), expected)
 
     def test_failures_preserve_file_byte_for_byte(self):
         errors = [URLError("offline"), TimeoutError("timeout"), HTTPError("url", 503, "unavailable", {}, None),
