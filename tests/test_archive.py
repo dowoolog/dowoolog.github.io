@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("archive", ROOT / "scripts/archive.py")
 archive = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(archive)
-# Fixtures must keep working when someone customizes config.json after a fork.
+# 저장소를 포크한 뒤 config.json을 변경해도 테스트용 데이터는 계속 동작해야 합니다.
 CONFIG = archive.resolve_config({
     "BLOG_ID": "dowoolog",
     "SITE_NAME": "Test Archive",

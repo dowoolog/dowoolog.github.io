@@ -1,4 +1,8 @@
-"""RSS metadata archive and static site builder; Python standard library only."""
+"""파이썬 표준 라이브러리로 RSS 글 정보를 보관하고 정적 사이트를 생성합니다.
+
+GitHub Actions에서 collect로 글을 수집한 뒤 build로 배포할 파일을 만듭니다.
+설정은 config.json, 글 데이터는 data/, 생성 결과는 _site/에 저장됩니다.
+"""
 
 import argparse
 from datetime import datetime, timezone, timedelta
@@ -17,12 +21,14 @@ from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 
+# 실행 위치와 관계없이 이 파일의 상위 폴더를 프로젝트 기준 경로로 사용합니다.
 ROOT = Path(__file__).resolve().parents[1]
 MAX_FEED_BYTES = 5_000_000
 KST = timezone(timedelta(hours=9))
 
 
 def excerpt_length(config):
+    # 미리보기 길이는 0~1000자만 허용하며, 0은 미리보기를 끕니다.
     length = config.get("EXCERPT_LENGTH", 180)
     if type(length) is not int or not 0 <= length <= 1000:
         raise ValueError("EXCERPT_LENGTH must be an integer between 0 and 1000")
@@ -30,7 +36,7 @@ def excerpt_length(config):
 
 
 class PlainText(HTMLParser):
-    """Extract readable RSS text without scripts, styles or embedded content."""
+    """RSS 본문에서 스크립트·스타일·삽입 콘텐츠를 제외한 텍스트를 추출합니다."""
     ignored = {"script", "style", "iframe", "object", "template", "noscript"}
     breaks = {"p", "div", "br", "hr", "li", "ul", "ol", "section", "article",
               "h1", "h2", "h3", "h4", "h5", "h6", "tr", "td", "blockquote"}
@@ -41,6 +47,7 @@ class PlainText(HTMLParser):
         self.hidden = []
 
     def handle_starttag(self, tag, attrs):
+        # 제외할 태그 내부의 내용은 숨기고, 문단 경계에는 공백을 넣습니다.
         if tag in self.ignored:
             self.hidden.append(tag)
         if tag in self.breaks and not self.hidden:
@@ -58,12 +65,14 @@ class PlainText(HTMLParser):
 
 
 def shorten(text, length):
+    # 말줄임표까지 포함하여 지정한 길이를 넘지 않도록 자릅니다.
     if not length:
         return ""
     return text if len(text) <= length else text[:length - 1].rstrip() + "…"
 
 
 def make_excerpt(description, length):
+    # HTML 태그를 제거하고 연속된 공백을 정리한 뒤 미리보기를 만듭니다.
     if not description or not length:
         return ""
     parser = PlainText()
@@ -73,7 +82,7 @@ def make_excerpt(description, length):
 
 
 def resolve_config(settings):
-    """Derive blog addresses from the single user-editable blog ID."""
+    """사용자가 설정한 블로그 ID로 블로그 주소와 RSS 주소를 구성합니다."""
     blog_id = settings.get("BLOG_ID", "")
     if not isinstance(blog_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", blog_id):
         raise ValueError("BLOG_ID must be a valid Naver blog ID")
@@ -86,16 +95,18 @@ def resolve_config(settings):
 
 
 def data_path(config):
-    # Each blog has its own archive, including when this repository is forked.
+    # 저장소를 포크하거나 블로그 ID를 바꿔도 블로그별 데이터를 따로 보관합니다.
     config = resolve_config(config)
     return ROOT / "data" / f"{config['BLOG_ID']}.json"
 
 
 def collection_state_path(path):
+    # 수집 상태와 시간은 게시글 데이터와 분리하여 임시 기록으로 저장합니다.
     return path.parent / ".runtime" / path.name
 
 
 def collection_state(path):
+    # 반환값은 (최근 수집 성공 시각, 수집 실패 여부)입니다.
     metadata = collection_state_path(path)
     if not metadata.exists():
         return None, False
@@ -109,7 +120,7 @@ def collection_state(path):
 
 
 def web_url(value):
-    """Reject credentials, control characters and non-HTTP(S) URLs."""
+    """인증 정보·제어 문자가 포함된 주소와 HTTP(S)가 아닌 주소를 거부합니다."""
     if not isinstance(value, str) or re.search(r'[\s<>"\\\x00-\x1f\x7f]', value):
         raise ValueError("Unsafe URL")
     parts = urlsplit(value)
@@ -121,7 +132,7 @@ def web_url(value):
 
 
 def post_url(value, blog_url):
-    """Normalize Naver's desktop/mobile/PostView links to one post identity."""
+    """네이버 PC·모바일·PostView 주소를 통일하여 같은 글의 중복을 막습니다."""
     parts = web_url(value)
     blog = web_url(blog_url)
     blog_id = blog.path.strip("/")
@@ -148,7 +159,7 @@ def parse_date(value):
         return None
     try:
         dt = parsedate_to_datetime(value)
-        # Do not invent a timezone if the feed did not provide one.
+        # RSS에 시간대가 없으면 임의로 추정하지 않고 날짜 미제공으로 처리합니다.
         if dt.tzinfo is None:
             return None
         return dt.astimezone(timezone.utc).isoformat()
@@ -157,13 +168,15 @@ def parse_date(value):
 
 
 def sort_posts(posts):
+    # 최신 글부터 정렬하고, 작성일이 없는 글은 목록 끝에 배치합니다.
     return sorted(posts, key=lambda p: (p["published_at"] or "", p["url"]), reverse=True)
 
 
 def parse_feed(raw, blog_url, length=180):
     if len(raw) > MAX_FEED_BYTES:
         raise ValueError("RSS exceeds size limit")
-    # RSS does not need DTDs. Also catches UTF-16/32 encodings before XML parsing.
+    # RSS에 필요 없는 DTD·엔티티 선언을 차단합니다.
+    # 널 바이트를 제거하여 UTF-16/32로 인코딩된 선언도 파싱 전에 확인합니다.
     probe = raw.replace(b"\x00", b"").upper()
     if b"<!DOCTYPE" in probe or b"<!ENTITY" in probe:
         raise ValueError("DTD/entity declarations are not allowed")
@@ -193,6 +206,7 @@ def parse_feed(raw, blog_url, length=180):
 
 
 def fetch_feed(url):
+    # 응답 크기 초과를 감지할 수 있도록 제한보다 1바이트 더 읽습니다.
     web_url(url)
     request = Request(url, headers={"User-Agent": "NaverBlogArchive/1.0 (daily RSS reader)"})
     with urlopen(request, timeout=30) as response:
@@ -200,7 +214,7 @@ def fetch_feed(url):
 
 
 def load_posts(path, blog_url):
-    """Fail closed on damaged storage; never replace it with an empty archive."""
+    """저장 데이터가 손상되면 중단하고, 빈 데이터로 덮어쓰지 않습니다."""
     if not path.exists():
         return []
     posts = json.loads(path.read_text(encoding="utf-8"))
@@ -226,11 +240,13 @@ def load_posts(path, blog_url):
 
 
 def save_posts(path, posts):
+    # 내용이 같으면 파일을 다시 쓰지 않아 불필요한 변경을 방지합니다.
     content = json.dumps(posts, ensure_ascii=False, indent=2) + "\n"
     if path.exists() and path.read_bytes() == content.encode("utf-8"):
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
+    # 같은 폴더에 임시 파일을 완성한 뒤 교체하여 저장 중 원본 손상을 방지합니다.
     try:
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
                                          dir=path.parent, delete=False) as output:
@@ -245,7 +261,7 @@ def save_posts(path, posts):
 
 def collect(config, path, fetcher=fetch_feed):
     length = excerpt_length(config)
-    # Reset this run before any operation that can fail; never reuse an old success.
+    # 실패할 수 있는 작업 전에 상태를 초기화하여 과거의 성공 기록을 재사용하지 않습니다.
     save_posts(collection_state_path(path), {"status": "failed"})
     existing = load_posts(path, config["BLOG_URL"])
     try:
@@ -256,11 +272,12 @@ def collect(config, path, fetcher=fetch_feed):
         print(f"Warning: RSS collection failed; existing data preserved: {error}", file=sys.stderr)
         return False
     merged = {}
+    # 기존 글을 먼저 보존하고 새 글을 추가하므로 RSS에서 빠진 글도 남습니다.
     for post in existing + incoming:
         url = post_url(post["url"], config["BLOG_URL"])
         merged.setdefault(url, {**post, "url": url})
-    # Backfill old records and refresh previews when the configured length changes.
-    # Missing descriptions or disabled previews never erase an archived excerpt.
+    # RSS에 남아 있는 글의 제목과 미리보기를 최신 정보로 갱신합니다.
+    # 본문이 없거나 미리보기를 꺼도 기존에 보관한 미리보기는 지우지 않습니다.
     for post in incoming:
         merged[post["url"]]["title"] = post["title"]
         if post["excerpt"]:
@@ -275,12 +292,14 @@ def collect(config, path, fetcher=fetch_feed):
 
 
 def build(config, posts, output, collected_at=None, collection_failed=False):
+    # 저장된 글로 HTML과 배포 파일을 생성합니다. 이 단계에서는 RSS를 수집하지 않습니다.
     length = excerpt_length(config)
     site_url = config["SITE_URL"].rstrip("/") + "/"
     site = web_url(site_url)
     if site.query or site.fragment:
         raise ValueError("SITE_URL must not contain query strings or fragments")
     web_url(config["BLOG_URL"])
+    # 외부 텍스트의 특수문자를 이스케이프하여 HTML 태그로 해석되지 않게 합니다.
     e = escape
     collection_label = "최근 가져온 시간: 기록 없음"
     if collection_failed:
@@ -290,6 +309,7 @@ def build(config, posts, output, collected_at=None, collection_failed=False):
         collection_label = (f'최근 가져온 시간: <time datetime="{local_time.isoformat()}">'
                             f'{local_time:%Y-%m-%d %H:%M} KST</time>')
     rows = []
+    # 게시글마다 날짜·카테고리·제목·미리보기로 구성된 목록 항목을 만듭니다.
     for post in sort_posts(posts):
         url = post_url(post["url"], config["BLOG_URL"])
         date = '<span class="date">작성일 미제공</span>'
@@ -310,6 +330,7 @@ def build(config, posts, output, collected_at=None, collection_failed=False):
                           ("naver-site-verification", "NAVER_SITE_VERIFICATION")]
         if config.get(key)
     )
+    # 페이지 구조와 문구를 수정하려면 아래 HTML을, 디자인은 static/style.css를 수정합니다.
     document = f'''<!doctype html>
 <html lang="ko">
 <head>
@@ -343,18 +364,20 @@ def build(config, posts, output, collected_at=None, collection_failed=False):
 </body>
 </html>
 '''
+    # GitHub Pages에 올릴 정적 파일을 준비합니다.
     output.mkdir(parents=True, exist_ok=True)
     (output / "index.html").write_text(document, encoding="utf-8")
     shutil.copyfile(ROOT / "static/style.css", output / "style.css")
     (output / ".nojekyll").write_text("", encoding="utf-8")
     (output / "robots.txt").write_text(f"User-agent: *\nAllow: /\n\nSitemap: {site_url}sitemap.xml\n", encoding="utf-8")
-    # Only this site's actual page belongs in its sitemap, never Naver URLs.
+    # 사이트맵에는 이 사이트의 실제 페이지만 넣고 네이버 원문 주소는 넣지 않습니다.
     sitemap = f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>{e(site_url)}</loc></url></urlset>\n'
     (output / "sitemap.xml").write_text(sitemap, encoding="utf-8")
     print(f"Built {output} ({len(posts)} posts)")
 
 
 def main():
+    # validate: 설정 검사 / collect: RSS 수집·저장 / build: 정적 사이트 생성
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["validate", "collect", "build"])
     args = parser.parse_args()
@@ -375,4 +398,5 @@ def main():
 
 
 if __name__ == "__main__":
+    # 종료 코드로 GitHub Actions에 실행 성공(0) 또는 실패를 전달합니다.
     sys.exit(main())
