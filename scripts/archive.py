@@ -80,7 +80,7 @@ def resolve_config(settings):
     return {
         **settings,
         "EXCERPT_LENGTH": excerpt_length(settings),
-        "BLOG_URL": f"https://blog.naver.com/{blog_id}",
+        "BLOG_URL": f"https://m.blog.naver.com/{blog_id}",
         "RSS_URL": settings.get("RSS_URL") or f"https://rss.blog.naver.com/{blog_id}.xml",
     }
 
@@ -125,7 +125,7 @@ def post_url(value, blog_url):
     parts = web_url(value)
     blog = web_url(blog_url)
     blog_id = blog.path.strip("/")
-    if blog.hostname != "blog.naver.com" or not re.fullmatch(r"[A-Za-z0-9_-]+", blog_id):
+    if blog.hostname not in ("blog.naver.com", "m.blog.naver.com") or not re.fullmatch(r"[A-Za-z0-9_-]+", blog_id):
         raise ValueError("BLOG_URL must identify a Naver blog")
     if parts.hostname not in ("blog.naver.com", "m.blog.naver.com"):
         raise ValueError("Post URL is outside Naver Blog")
@@ -140,7 +140,7 @@ def post_url(value, blog_url):
         raise ValueError("Not a recognized post URL")
     if owner != blog_id or not re.fullmatch(r"\d+", number):
         raise ValueError("Post does not belong to the configured blog")
-    return f"https://blog.naver.com/{owner}/{number}"
+    return f"https://m.blog.naver.com/{owner}/{number}"
 
 
 def parse_date(value):
@@ -330,7 +330,7 @@ def build(config, posts, output, collected_at=None, collection_failed=False):
 <body>
 <a class="skip" href="#posts">게시글 목록으로 건너뛰기</a>
 <div class="container">
-<header><p class="collection-time">{collection_label} · 매시간 정각 자동 수집 예정</p>
+<header><p class="collection-time">{collection_label}</p>
 <h1>{e(config['SITE_NAME'])}</h1>
 <p class="intro">{e(config['DESCRIPTION'])}</p>
 <a class="blog-link" href="{e(config['BLOG_URL'], quote=True)}">네이버 블로그 방문 ↗</a></header>

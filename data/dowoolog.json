@@ -1,35 +1,35 @@
 [
   {
     "title": "책을 읽어야 하는 이유",
-    "url": "https://blog.naver.com/dowoolog/224458672000",
+    "url": "https://m.blog.naver.com/dowoolog/224458672000",
     "published_at": "2026-10-30T00:08:20+00:00",
     "category": "인문학",
     "excerpt": "책을 읽어야 한다고 항상 말하지만 정확하게 그 이유를 정리하지 못하고 살았다. 이번 기회에 그 이유를 정리하고자 한다. 1. 책을 읽는 것은 가장 효율적인 두뇌 훈련이다. 책을 읽는다는 건 글을 읽고 상상한다는 것이고 이는 두뇌의 많은 부위를 활성화하여 자극을 주는 행위이다. 근육을 키우기 위해서 무거운 것을 들어서 자…"
   },
   {
     "title": "Visual Studio 2026 단축키 정리",
-    "url": "https://blog.naver.com/dowoolog/224458661624",
+    "url": "https://m.blog.naver.com/dowoolog/224458661624",
     "published_at": "2026-10-29T23:56:08+00:00",
     "category": "Tool",
     "excerpt": "1. 빌드 / 실행 솔루션 빌드: Ctrl + Shift + B 컴파일: Ctrl + F7 빌드 취소: Ctrl + Break 2. 디버깅 디버그 시작/계속: F5 디버그 없이 실행: Ctrl + F5 중단점 토글: F9 모든 중단점 삭제: Ctrl + Shift + F9 스텝 오버 (한줄씩 실행) / 인 (내부 실행)…"
   },
   {
     "title": "네이버 블로그를 구글 검색에 등록하게 만들기 (Github Action)",
-    "url": "https://blog.naver.com/dowoolog/224458028722",
+    "url": "https://m.blog.naver.com/dowoolog/224458028722",
     "published_at": "2026-10-29T08:28:55+00:00",
     "category": "etc.",
     "excerpt": "네이버 블로그는 구글 검색 엔진에 노출되지 않는 경우가 많다. (모바일 버전 제외) 그래서 별도의 아카이브 페이지를 만든 후 네이버 블로그 글과 링크를 제공하는 방식을 사용해보자. (무료다.) 과정은 다음과 같다. Github Pages로 사이트 제작 -> Github Action으로 자동으로 나의 네이버 블로그 글 수…"
   },
   {
     "title": "네이버 블로그 레이아웃에 링크 거는 법",
-    "url": "https://blog.naver.com/dowoolog/224457753004",
+    "url": "https://m.blog.naver.com/dowoolog/224457753004",
     "published_at": "2026-10-29T04:41:24+00:00",
     "category": "etc.",
     "excerpt": "티스토리에서는 다른 사이트 주소로 가는 하이퍼 링크를 쉽게 달 수 있었다. 하지만 네이버 블로그에서는 찾는게 어려웠다. 결론부터 말하자면 커스텀 위젯을 사용해서 추가해야 한다. 내 메뉴 - 관리 - 꾸미기 설정 - 스킨 선택 - 레이아웃 설정을 누른다 오른쪽 하단에 + 위젯직접등록 BETA를 누른다 HTML 코드를 넣을…"
   },
   {
     "title": "네이버 블로그 글씨 크기 미리보기",
-    "url": "https://blog.naver.com/dowoolog/224456783394",
+    "url": "https://m.blog.naver.com/dowoolog/224456783394",
     "published_at": "2026-10-28T07:24:49+00:00",
     "category": "etc.",
     "excerpt": "기본 글씨 크기 16 19 24 코드 글꼴 크기 크기 13 크기 15 크기 16 글 기본 글자 크기는 19, 코드 글자 크기는 15로 정했다. 대항목은 글자 크기 30, 굵기 적용을 한다. 서체는 나눔고딕을 사용한다."

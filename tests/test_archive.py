@@ -125,7 +125,7 @@ class ArchiveTests(unittest.TestCase):
         config = archive.resolve_config({**CONFIG, "BLOG_ID": "another_blog",
                                          "SITE_NAME": "다른 이름 & Archive", "RSS_URL": ""})
         self.assertEqual(config["RSS_URL"], "https://rss.blog.naver.com/another_blog.xml")
-        self.assertEqual(config["BLOG_URL"], "https://blog.naver.com/another_blog")
+        self.assertEqual(config["BLOG_URL"], "https://m.blog.naver.com/another_blog")
         with tempfile.TemporaryDirectory() as tmp, patch.object(archive, "ROOT", Path(tmp)):
             old_path = archive.data_path(CONFIG)
             archive.save_posts(old_path, archive.parse_feed(SAMPLE, BLOG))
@@ -142,7 +142,7 @@ class ArchiveTests(unittest.TestCase):
             for old in ["dowoolog", "Dowoo", "DOWOO", "Test Archive"]:
                 self.assertNotIn(old, html)
             self.assertEqual(html.count("다른 이름 &amp; Archive"), 5)
-            self.assertIn('href="https://blog.naver.com/another_blog"', html)
+            self.assertIn('href="https://m.blog.naver.com/another_blog"', html)
 
     def test_invalid_blog_id_cannot_escape_data_directory(self):
         for value in ["../other", "", "a/b", None]:
@@ -166,7 +166,7 @@ class ArchiveTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 archive.post_url(url, BLOG)
         self.assertEqual(archive.post_url("http://m.blog.naver.com/dowoolog/123?tracking=1#x", BLOG),
-                         "https://blog.naver.com/dowoolog/123")
+                         "https://m.blog.naver.com/dowoolog/123")
 
     def test_invalid_dates_are_not_invented(self):
         for value in [None, "", "not a date", "Thu, 29 Oct 2026 13:41:24"]:
@@ -196,7 +196,7 @@ class ArchiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'posts.json'
             original = archive.parse_feed(SAMPLE, BLOG)
-            original[0]['url'] = 'http://m.blog.naver.com/dowoolog/123?tracking=1'
+            original[0]['url'] = 'http://blog.naver.com/dowoolog/123?tracking=1'
             archive.save_posts(path, original)
             feed = b'<rss><channel><item><title>Renamed post</title><link>https://blog.naver.com/PostView.naver?blogId=dowoolog&amp;logNo=123</link></item></channel></rss>'
             self.assertTrue(archive.collect(CONFIG, path, lambda _: feed))
@@ -264,7 +264,7 @@ class ArchiveTests(unittest.TestCase):
             html = (output / "index.html").read_text(encoding="utf-8")
             self.assertIn('&lt;script&gt;alert(1)&lt;/script&gt; &amp;', html)
             self.assertNotIn('<script', html)
-            self.assertIn('href="https://blog.naver.com/dowoolog/123"', html)
+            self.assertIn('href="https://m.blog.naver.com/dowoolog/123"', html)
             self.assertIn('rel="canonical" href="https://example.com/archive/"', html)
             self.assertIn('name="google-site-verification" content="a&quot;&lt;b"', html)
             self.assertIn('name="naver-site-verification" content="naver-token"', html)
